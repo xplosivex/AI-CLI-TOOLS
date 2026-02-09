@@ -24,9 +24,11 @@ AI assistants often struggle with file editing because they can't reliably track
 ## Installation
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/aitools.git
-cd aitools
-python install.py
+git clone repo
+```
+OR
+```bash
+Download the release
 ```
 
 Verify installation:
