@@ -30,6 +30,11 @@ OR
 ```bash
 Download the release
 ```
+Install:
+
+```bash
+python install.py
+```
 
 Verify installation:
 ```bash
