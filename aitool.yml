@@ -1,0 +1,20 @@
+backup:
+  enabled: true                    # auto-backup on every aiedit
+  dir: .aibackup                   # backup folder
+  max_backups: 20                  # per file, oldest pruned
+
+view:
+  max_lines: 500                   # truncate with warning if file exceeds this
+  number_width: 5                  # line number padding
+
+edit:
+  confirm_large_delete: 50         # warn if deleting more than N lines
+  create_if_missing: false         # aiedit on nonexistent file creates it?
+
+find:
+  ignore_dirs:                     # skip these in recursive search
+    - .git
+    - node_modules
+    - __pycache__
+    - .aibackup
+  max_results: 100
