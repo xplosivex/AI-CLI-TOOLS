@@ -1,0 +1,219 @@
+AI FILE TOOLS — AGENT RULES
+============================
+
+You have access to a set of command-line tools for file viewing, editing, searching, diffing, and backup. These tools are already installed and available in PATH. Use them instead of cat, sed, awk, echo-redirect, or python one-liners for all file operations.
+
+
+CRITICAL RULES
+--------------
+
+1. ALWAYS use aiview to read files. Never use cat, head, tail, sed -n, or python to view file contents.
+2. ALWAYS use aiedit to modify files. Never use sed -i, echo >>, python scripts, or heredocs to edit files.
+3. ALWAYS read the relevant lines with aiview BEFORE making any edit. You must know the current line numbers.
+4. ALWAYS verify your edit after making it by running aiview on the affected line range.
+5. NEVER guess line numbers. They shift after every insert or delete. Re-read the file if you've made prior edits.
+6. Work in small, verifiable steps. One edit at a time, verify, then proceed.
+
+
+TOOL REFERENCE
+==============
+
+
+aiview — Read files (ALWAYS use this to view files)
+----------------------------------------------------
+
+    aiview <file>                       Whole file with line numbers
+    aiview <file> -l <N>                Single line N
+    aiview <file> -r <START> <END>      Lines START through END (inclusive)
+    aiview <file> --head <N>            First N lines
+    aiview <file> --tail <N>            Last N lines
+    aiview <file> --grep "<pattern>"    Lines matching regex pattern
+    aiview <file> --summary             Line count, file size, type
+
+Output format (line numbers are always shown):
+
+        1 | #!/usr/bin/env python3
+        2 | import os
+        3 | import sys
+
+
+aiedit — Edit files (ALWAYS use this for modifications)
+-------------------------------------------------------
+
+    aiedit <file> replace <LINE> -c "<content>"              Replace single line
+    aiedit <file> replace <START> <END> -c "<content>"       Replace line range
+    aiedit <file> insert <LINE> -c "<content>"               Insert BEFORE line
+    aiedit <file> append <LINE> -c "<content>"               Insert AFTER line
+    aiedit <file> delete <LINE>                              Delete single line
+    aiedit <file> delete <START> <END>                       Delete line range
+
+Content rules:
+
+    Use -c "content here" for the new text.
+    Use literal \n inside the -c string for multiple lines:
+        -c "line one\nline two\nline three"
+    For large multiline blocks, pipe via stdin:
+        echo "content" | aiedit <file> insert <LINE> --stdin
+    Or use a heredoc with --stdin:
+        aiedit <file> replace <START> <END> --stdin << 'EOF'
+        first line
+        second line
+        third line
+        EOF
+
+Flags:
+
+    --no-backup     Skip auto-backup for this edit
+    --force         Allow deleting more than 50 lines at once
+
+
+aibackup — Backup and restore
+------------------------------
+
+    aibackup save <file>                           Create snapshot
+    aibackup save <file> --tag "<name>"            Named snapshot
+    aibackup list <file>                           List all snapshots
+    aibackup restore <file>                        Restore most recent
+    aibackup restore <file> --tag "<name>"         Restore by tag name
+    aibackup diff <file>                           Diff current vs last backup
+
+
+aidiff — Compare files
+----------------------
+
+    aidiff <file1> <file2>                     Diff two files
+    aidiff <file> --backup                     Diff current vs last backup
+    aidiff <file> --backup --tag <name>        Diff current vs tagged backup
+
+
+aifind — Search across files
+-----------------------------
+
+    aifind "<pattern>" <path>                  Recursive regex search
+    aifind "<pattern>" <path> -ext .py .js     Filter by extension
+    aifind "<pattern>" <file>                  Search single file
+    aifind "<pattern>" <path> -s               Case-sensitive (default is case-insensitive)
+    aifind "<pattern>" <path> --max <N>        Limit results
+
+Output format:
+
+    src/main.py:42 | matched line content here
+    src/utils.py:7 | another match
+
+
+WORKFLOW PATTERNS
+=================
+
+
+Reading before editing (MANDATORY)
+----------------------------------
+
+    WRONG — guessing what is on line 10:
+
+        aiedit app.py replace 10 -c "new content"
+
+    RIGHT — look first, then edit, then verify:
+
+        aiview app.py -r 8 12
+        (see that line 10 is "    old_value = True")
+        aiedit app.py replace 10 -c "    new_value = False"
+        aiview app.py -r 8 12
+        (verify the edit landed correctly)
+
+
+Multiple edits to the same file
+--------------------------------
+
+Line numbers shift after inserts and deletes. Always work bottom-to-top
+when making multiple independent edits, or re-read line numbers between edits.
+
+    WRONG — line numbers shifted after first insert:
+
+        aiedit app.py insert 10 -c "import json"
+        aiedit app.py insert 20 -c "import yaml"
+        (line 20 is now line 21 because of the insert above)
+
+    RIGHT — work bottom-up:
+
+        aiedit app.py insert 20 -c "import yaml"
+        aiedit app.py insert 10 -c "import json"
+
+    OR — re-read between edits:
+
+        aiedit app.py insert 10 -c "import json"
+        aiview app.py --grep "def process"
+        (find the new correct line number)
+        aiedit app.py insert 21 -c "import yaml"
+
+
+Replacing a block of code
+--------------------------
+
+    aiview app.py --grep "def process"
+    (output shows:    25 | def process(data):)
+
+    aiview app.py -r 25 40
+    (read the full function to find where it ends)
+
+    aiedit app.py replace 25 33 -c "def process(data):\n    result = validate(data)\n    return transform(result)"
+
+    aiview app.py -r 25 30
+    (verify the replacement)
+
+
+Creating a new file
+-------------------
+
+    echo "#!/usr/bin/env python3" > newfile.py
+    aiedit newfile.py append 1 -c "\"\"\"New module.\"\"\"\n\nimport os\nimport sys"
+    aiview newfile.py
+
+
+Safe refactoring with backup
+-----------------------------
+
+    aibackup save app.py --tag "before-refactor"
+
+    (make your changes...)
+    aiedit app.py replace 10 25 -c "..."
+
+    (if something went wrong)
+    aibackup restore app.py --tag "before-refactor"
+
+    (or just check what changed)
+    aidiff app.py --backup --tag "before-refactor"
+
+
+Finding and fixing across a codebase
+--------------------------------------
+
+    aifind "TODO" src/ -ext .py
+    aifind "def calculate_total" src/
+    aiview src/billing.py -r 40 55
+    aiedit src/billing.py replace 45 -c "    total = sum(item.price for item in items)"
+    aiview src/billing.py -r 43 47
+
+
+COMMON MISTAKES TO AVOID
+=========================
+
+1. Editing without reading first. You MUST aiview the target lines before every edit.
+2. Stale line numbers. After any insert or delete, all subsequent line numbers have shifted. Re-read.
+3. Forgetting to verify. Always aiview after an edit to confirm it worked.
+4. Using other tools. Do not fall back to sed, awk, cat, echo >>, python -c, or heredoc-redirect for file operations. These tools exist specifically to replace all of that.
+5. Editing huge ranges blindly. If replacing more than ~10 lines, use --stdin with a heredoc for clarity.
+6. Not using aifind. When you need to locate something in a codebase, use aifind instead of grep or find+xargs.
+
+
+CONFIGURATION
+=============
+
+These tools respect an aitool.yml config file (searched upward from CWD, then ~/.aitool.yml). Defaults:
+
+    Auto-backup is enabled on every edit (saved to .aibackup/ next to the file)
+    Max 20 backups per file, oldest are pruned automatically
+    Large file viewing warns and truncates at 500 lines
+    Delete safety check triggers at 50+ lines (override with --force)
+    Recursive search ignores .git, node_modules, __pycache__, .aibackup, .venv
+
+You do not need to modify the config. It works with sensible defaults.
